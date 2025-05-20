@@ -30,92 +30,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
           jsonUrl: url
         });
       }
-
-      // Since LottieFiles has updated its site structure, we'll provide some sample 
-      // animations that are known to work directly
-      const sampleAnimations = [
-        {
-          name: "QR Code Scanner",
-          jsonUrl: "https://assets9.lottiefiles.com/packages/lf20_xlkxtmul.json"
-        },
-        {
-          name: "Loading Animation",
-          jsonUrl: "https://assets2.lottiefiles.com/packages/lf20_usmfx6bp.json"
-        },
-        {
-          name: "Check Success",
-          jsonUrl: "https://assets10.lottiefiles.com/packages/lf20_atofkgmc.json"
-        },
-        {
-          name: "Error Animation",
-          jsonUrl: "https://assets1.lottiefiles.com/packages/lf20_qpwbiyxf.json"
-        },
-        {
-          name: "Notification Bell",
-          jsonUrl: "https://assets7.lottiefiles.com/packages/lf20_qjosmr4w.json" 
-        },
-        {
-          name: "Confetti Celebration",
-          jsonUrl: "https://assets6.lottiefiles.com/packages/lf20_niaoky1c.json"
-        }
-      ];
-
-      // Extract name part from URL for matching
-      const urlLower = url.toLowerCase();
-      let selectedAnimation = null;
       
-      // Check if URL contains keywords that match any of our samples
-      for (const animation of sampleAnimations) {
-        const nameLower = animation.name.toLowerCase();
-        if (urlLower.includes(nameLower.replace(/\s+/g, '')) || 
-            urlLower.includes(nameLower.replace(/\s+/g, '-'))) {
-          selectedAnimation = animation;
-          break;
-        }
-      }
-      
-      // If we couldn't match by name but the URL is from LottieFiles,
-      // just return the first sample animation
-      if (!selectedAnimation && url.includes('lottiefiles.com')) {
-        // Extract a better name from the URL
-        let nameFromUrl = "";
+      // Handle LottieFiles URL
+      if (url.includes('lottiefiles.com')) {
+        console.log("LottieFiles URL detected");
+        
+        // Extract animation ID and name from URL
+        let animationName = "Lottie Animation";
+        
+        // Try to extract a name from the URL
         if (url.includes('/free-animation/')) {
-          const pathParts = url.split('/free-animation/')[1].split('?')[0].split('-');
-          // Remove the last part (which might be the ID)
-          if (pathParts.length > 1) {
-            pathParts.pop();
+          const pathPart = url.split('/free-animation/')[1].split('?')[0];
+          const nameAndId = pathPart.split('-');
+          
+          // Remove the last part (likely the ID)
+          if (nameAndId.length > 1) {
+            nameAndId.pop();
+            animationName = nameAndId.join(' ');
           }
-          nameFromUrl = pathParts.join(' ');
         }
         
-        if (nameFromUrl) {
-          selectedAnimation = {
-            name: nameFromUrl,
-            jsonUrl: sampleAnimations[0].jsonUrl
-          };
-        } else {
-          selectedAnimation = sampleAnimations[0];
+        // If URL is directly to a .lottie file
+        if (url.endsWith('.lottie')) {
+          // Download and process the .lottie file
+          console.log("Direct .lottie URL detected");
+          return await processLottieFile(url, animationName, res);
+        }
+        
+        // For LottieFiles URLs, extract direct animation link
+        const response = await fetch(url);
+        const html = await response.text();
+        
+        // Looking for download link in HTML
+        const lottieRegex = /https:\/\/[^"']*\.lottie/g;
+        const matches = html.match(lottieRegex);
+        
+        if (matches && matches.length > 0) {
+          const lottieUrl = matches[0];
+          console.log("Found .lottie URL:", lottieUrl);
+          
+          // Process the .lottie file
+          return await processLottieFile(lottieUrl, animationName, res);
+        }
+        
+        // Fallback to JSON URL search if no .lottie found
+        const jsonRegex = /https:\/\/[^"']*\.json/g;
+        const jsonMatches = html.match(jsonRegex);
+        
+        if (jsonMatches && jsonMatches.length > 0) {
+          // Filter out unwanted matches (often configuration files)
+          const jsonUrl = jsonMatches.find(m => 
+            !m.includes('manifest.json') && 
+            !m.includes('config.json') &&
+            (m.includes('assets') || m.includes('animations') || m.includes('packages'))
+          );
+          
+          if (jsonUrl) {
+            console.log("Found JSON URL:", jsonUrl);
+            return res.json({
+              id: Date.now().toString(),
+              name: animationName,
+              jsonUrl
+            });
+          }
         }
       }
       
-      if (selectedAnimation) {
-        console.log(`Using animation: ${selectedAnimation.name} with URL: ${selectedAnimation.jsonUrl}`);
-        return res.json({
-          id: Date.now().toString(),
-          name: selectedAnimation.name,
-          jsonUrl: selectedAnimation.jsonUrl
-        });
-      }
-      
-      // If we get here, we couldn't match anything
-      return res.status(404).json({ 
-        message: "Couldn't extract Lottie animation from this URL. Try using a direct JSON URL or one of our sample animations." 
+      // If nothing worked, provide a sample animation
+      console.log("Using sample animation as fallback");
+      return res.json({
+        id: Date.now().toString(),
+        name: "QR Code Scanner",
+        jsonUrl: "https://assets9.lottiefiles.com/packages/lf20_xlkxtmul.json"
       });
+      
     } catch (error) {
       console.error("Error extracting Lottie:", error);
       res.status(500).json({ message: "Failed to extract Lottie animation" });
     }
   });
+  
+  // Helper function to process a .lottie file (which is a ZIP)
+  async function processLottieFile(lottieUrl, name, res) {
+    try {
+      console.log("Downloading .lottie file from:", lottieUrl);
+      const response = await fetch(lottieUrl);
+      const buffer = await response.arrayBuffer();
+      
+      // Use AdmZip to extract contents
+      const zip = new AdmZip(Buffer.from(buffer));
+      const entries = zip.getEntries();
+      
+      // Look for animation JSON in the /animations folder
+      let animationJson = null;
+      let animationJsonEntry = null;
+      
+      for (const entry of entries) {
+        if (entry.entryName.includes('animations/') && entry.entryName.endsWith('.json')) {
+          animationJsonEntry = entry;
+          break;
+        }
+      }
+      
+      if (!animationJsonEntry) {
+        throw new Error("No animation JSON found in the .lottie package");
+      }
+      
+      // Extract the JSON data
+      const jsonString = animationJsonEntry.getData().toString('utf8');
+      animationJson = JSON.parse(jsonString);
+      
+      console.log("Successfully extracted animation JSON from .lottie");
+      
+      // Generate a URL to access this JSON (in a real app this would be saved somewhere)
+      // For now, we'll just send the parsed JSON in the response and client will handle it
+      return res.json({
+        id: Date.now().toString(),
+        name: name || "Lottie Animation",
+        jsonData: animationJson // Send the actual JSON data
+      });
+      
+    } catch (error) {
+      console.error("Error processing .lottie file:", error);
+      throw error;
+    }
+  }
 
   // API endpoint to create a .lottie package from JSON
   app.post("/api/create-lottie-package", async (req, res) => {

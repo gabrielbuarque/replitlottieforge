@@ -1,0 +1,75 @@
+1. Nome e proposta de valor
+Nome provisório: LottieForge
+Proposta: permitir que qualquer usuário — designer, dev ou produtor de conteúdo — importe animações do LottieFiles usando só a URL, edite cores e parâmetros em tempo real e gerencie versões num painel simples.
+
+2. Funcionalidades principais
+Importar animação via URL
+
+Um campo de texto onde você cola a URL da página do LottieFiles.
+
+O app “raspa” a página, extrai o <dotlottie-player> e captura o src do .lottie.
+
+Download e extração automática
+
+Faz download do .lottie (que é um ZIP), extrai o conteúdo e isola o JSON principal em /animations.
+
+Editor de JSON + Live Preview
+
+Um editor de código com realce de sintaxe (monaco.js ou CodeMirror).
+
+Ao lado, um canvas com o player Lottie que reflita TODAS as alterações imediatamente.
+
+Edição não destrutiva: você altera só os campos de cor, mas pode também buscar qualquer propriedade e mexer livremente.
+
+Ferramenta de troca de cores “visuall”
+
+Um painel onde o app detecta todos os fills e strokes com cores estáticas (arrays RGB).
+
+Lista cada cor usada (ex.: #FF3366) e permite selecionar uma nova cor via color-picker.
+
+Ao trocar, o JSON é atualizado e a preview recarrega.
+
+Exportar versão
+
+Botão “Exportar JSON” gera o arquivo puro animation.json.
+
+Botão “Exportar .lottie” recompacta o ZIP com o novo JSON e assets.
+
+Gerenciamento de projetos
+
+Cada import cria um “projeto” salvo localmente ou na nuvem (dependendo de auth).
+
+Lista de projetos com nome, data de importação e thumbnail da animação.
+
+Ao reabrir, você retoma o JSON e o histórico de cores alteradas.
+
+Histórico de alterações
+
+Internamente, o app mantém um diff simples: sempre que trocar uma cor, registra a versão anterior.
+
+Permite “undo”/“redo” e reverter para qualquer snapshot.
+
+Integrações avançadas (futuro)
+
+Login com GitHub/Google para salvar projetos na nuvem.
+
+Compartilhamento de link público para visualizar no navegador.
+
+Animações colaborativas em tempo real (edição simultânea).
+
+3. Fluxo de usuário (exemplo)
+Home → campo “Cole a URL do LottieFiles” → botão “Importar”
+
+O app extrai *.lottie → baixa e extrai → cria projeto “qr-preloader”
+
+Tela do projeto dividida em 3 áreas:
+
+Árvore de layers (estrutura do JSON)
+
+Editor de código (JSON bruto, com busca por "c":{...})
+
+Preview (canvas com a animação)
+
+Painel de Cores detecta fills/strokes estáticos → mostra swatches → você clica num swatch, escolhe cor nova → preview e JSON sincronizam.
+
+Salvar/Exportar → opções de download .json ou .lottie.
