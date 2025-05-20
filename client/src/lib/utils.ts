@@ -150,3 +150,33 @@ export function replaceColorInLottie(lottieData: any, oldColor: string, newColor
   traverseAndReplace(updatedData);
   return updatedData;
 }
+
+export function replaceAllColorsInLottie(lottieData: any, newColor: string): any {
+  const newRgb = hexToRgb(newColor);
+  
+  if (!newRgb) return lottieData;
+  
+  // Create a deep copy to avoid mutating the original
+  const updatedData = JSON.parse(JSON.stringify(lottieData));
+  
+  function traverseAndReplaceAll(obj: any) {
+    if (!obj || typeof obj !== 'object') return;
+    
+    // Check if this is a color field (expecting array of RGB values)
+    if (obj.k && Array.isArray(obj.k) && obj.k.length === 3 && 
+        obj.k.every((val: any) => typeof val === 'number' && val >= 0 && val <= 1)) {
+      // Replace with new color, regardless of original color
+      obj.k = [...newRgb];
+    }
+    
+    // Recursively check all properties
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        traverseAndReplaceAll(obj[key]);
+      }
+    }
+  }
+  
+  traverseAndReplaceAll(updatedData);
+  return updatedData;
+}
