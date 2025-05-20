@@ -129,13 +129,18 @@ export function replaceColorInLottie(lottieData: any, oldColor: string, newColor
         obj.k.every((val: any) => typeof val === 'number' && val >= 0 && val <= 1)) {
       // Compare with allowed tolerance
       const tolerance = 0.01;
+      const r = oldRgb[0];
+      const g = oldRgb[1];
+      const b = oldRgb[2];
+      
       if (
-        Math.abs(obj.k[0] - oldRgb[0]) < tolerance &&
-        Math.abs(obj.k[1] - oldRgb[1]) < tolerance &&
-        Math.abs(obj.k[2] - oldRgb[2]) < tolerance
+        Math.abs(obj.k[0] - r) < tolerance &&
+        Math.abs(obj.k[1] - g) < tolerance &&
+        Math.abs(obj.k[2] - b) < tolerance
       ) {
         // Replace with new color
-        obj.k = [...newRgb];
+        const [nr, ng, nb] = newRgb;
+        obj.k = [nr, ng, nb];
       }
     }
     
@@ -166,7 +171,8 @@ export function replaceAllColorsInLottie(lottieData: any, newColor: string): any
     if (obj.k && Array.isArray(obj.k) && obj.k.length === 3 && 
         obj.k.every((val: any) => typeof val === 'number' && val >= 0 && val <= 1)) {
       // Replace with new color, regardless of original color
-      obj.k = [...newRgb];
+      const [r, g, b] = newRgb;
+      obj.k = [r, g, b];
     }
     
     // Recursively check all properties
