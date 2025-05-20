@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { extractLottieFromUrl, getLottieJsonData } from "@/lib/lottieService";
+import { replaceColorInLottie } from "@/lib/utils";
 
 interface Project {
   id: string;
@@ -103,27 +104,27 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     try {
       // 1. Extract metadata from URL
       const metadata = await extractLottieFromUrl(url);
-      
       let jsonData: any;
-      
       // 2. Get the actual JSON data
       if (metadata.jsonData) {
-        // If the server already sent us the JSON data (e.g., from a .lottie file)
         jsonData = metadata.jsonData;
       } else if (metadata.jsonUrl) {
-        // If we got a URL, fetch the JSON
         jsonData = await getLottieJsonData(metadata.jsonUrl);
       } else {
         throw new Error("No animation data found");
       }
-      
-      // 3. Create a new project with the data
-      return createProject(metadata.name, jsonData, metadata.jsonUrl || "local://import");
+      // 3. Aplique logs/troca de cor (dummy: troca cor igual por igual só para logar)
+      jsonData = replaceColorInLottie(jsonData, "#000000", "#000000");
+      // 4. Create a new project with the data
+      const id = createProject(metadata.name, jsonData, metadata.jsonUrl || "local://import");
+      // 5. Carregar o projeto importado como atual
+      await loadProject(id);
+      return id;
     } catch (error) {
       console.error("Failed to import project", error);
       throw new Error("Failed to import animation from URL");
     }
-  }, [createProject]);
+  }, [createProject, loadProject]);
   
   const deleteProject = useCallback((id: string) => {
     const updatedProjects = projects.filter(project => project.id !== id);

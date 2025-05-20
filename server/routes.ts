@@ -34,57 +34,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Handle LottieFiles URL
       if (url.includes('lottiefiles.com')) {
         console.log("LottieFiles URL detected");
-        
-        // Extract animation ID and name from URL
         let animationName = "Lottie Animation";
-        
-        // Try to extract a name from the URL
         if (url.includes('/free-animation/')) {
           const pathPart = url.split('/free-animation/')[1].split('?')[0];
           const nameAndId = pathPart.split('-');
-          
-          // Remove the last part (likely the ID)
           if (nameAndId.length > 1) {
             nameAndId.pop();
             animationName = nameAndId.join(' ');
           }
         }
-        
-        // If URL is directly to a .lottie file
-        if (url.endsWith('.lottie')) {
-          // Download and process the .lottie file
-          console.log("Direct .lottie URL detected");
-          return await processLottieFile(url, animationName, res);
-        }
-        
-        // For LottieFiles URLs, extract direct animation link
+        // Buscar o elemento <dotlottie-player> e pegar o src completo
         const response = await fetch(url);
         const html = await response.text();
-        
-        // Looking for download link in HTML
-        const lottieRegex = /https:\/\/[^"']*\.lottie/g;
+        const $ = cheerio.load(html);
+        let lottieSrc = null;
+        $("dotlottie-player").each((_, el) => {
+          const src = $(el).attr("src");
+          if (src && src.endsWith('.lottie') && src.startsWith('http')) {
+            lottieSrc = src;
+            return false; // break loop
+          }
+        });
+        if (lottieSrc) {
+          // Baixar e processar o .lottie
+          return await processLottieFile(lottieSrc, animationName, res);
+        }
+        // Fallback para regex antigo se não achar o elemento
+        const lottieRegex = /https:\/\/[^"'\s>]+\/[^"'\s>]+\.lottie/g;
         const matches = html.match(lottieRegex);
-        
         if (matches && matches.length > 0) {
-          const lottieUrl = matches[0];
+          // Filtrar para pegar o primeiro que contenha 'lottiefiles.com' e '/a/'
+          const lottieUrl = matches.find(url => url.includes('lottiefiles.com') && url.includes('/a/')) || matches[0];
           console.log("Found .lottie URL:", lottieUrl);
-          
-          // Process the .lottie file
           return await processLottieFile(lottieUrl, animationName, res);
         }
-        
-        // Fallback to JSON URL search if no .lottie found
+        // Fallback para JSON URL search se não achar .lottie
         const jsonRegex = /https:\/\/[^"']*\.json/g;
         const jsonMatches = html.match(jsonRegex);
-        
         if (jsonMatches && jsonMatches.length > 0) {
-          // Filter out unwanted matches (often configuration files)
           const jsonUrl = jsonMatches.find(m => 
             !m.includes('manifest.json') && 
             !m.includes('config.json') &&
             (m.includes('assets') || m.includes('animations') || m.includes('packages'))
           );
-          
           if (jsonUrl) {
             console.log("Found JSON URL:", jsonUrl);
             return res.json({

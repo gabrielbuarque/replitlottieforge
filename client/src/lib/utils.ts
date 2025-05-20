@@ -69,12 +69,33 @@ export function extractColorsFromLottie(lottieData: any): string[] {
   function traverseObject(obj: any) {
     if (!obj || typeof obj !== 'object') return;
     
-    // Check if this is a color field (expecting array of RGB values)
-    if (obj.k && Array.isArray(obj.k) && obj.k.length === 3 && 
+    // Detect [r, g, b] 0-1 (padrão)
+    if (obj.k && Array.isArray(obj.k) && obj.k.length === 3 &&
         obj.k.every((val: any) => typeof val === 'number' && val >= 0 && val <= 1)) {
-      // Convert RGB 0-1 to hex
       const hexColor = rgbToHex(obj.k[0], obj.k[1], obj.k[2]);
       colors.add(hexColor);
+    }
+    // Detect [r, g, b, a] 0-1
+    else if (obj.k && Array.isArray(obj.k) && obj.k.length === 4 &&
+        obj.k.slice(0, 3).every((val: any) => typeof val === 'number' && val >= 0 && val <= 1)) {
+      const hexColor = rgbToHex(obj.k[0], obj.k[1], obj.k[2]);
+      colors.add(hexColor);
+    }
+    // Detect [r, g, b] 0-255
+    else if (obj.k && Array.isArray(obj.k) && obj.k.length === 3 &&
+        obj.k.every((val: any) => typeof val === 'number' && val >= 0 && val <= 255)) {
+      const hexColor = rgbToHex(obj.k[0] / 255, obj.k[1] / 255, obj.k[2] / 255);
+      colors.add(hexColor);
+    }
+    // Detect [r, g, b, a] 0-255
+    else if (obj.k && Array.isArray(obj.k) && obj.k.length === 4 &&
+        obj.k.slice(0, 3).every((val: any) => typeof val === 'number' && val >= 0 && val <= 255)) {
+      const hexColor = rgbToHex(obj.k[0] / 255, obj.k[1] / 255, obj.k[2] / 255);
+      colors.add(hexColor);
+    }
+    // Detect hex string
+    else if (typeof obj.k === 'string' && /^#([A-Fa-f0-9]{6})$/.test(obj.k)) {
+      colors.add(obj.k.toUpperCase());
     }
     
     // Recursively check all properties
@@ -112,71 +133,148 @@ export function hexToRgb(hex: string): [number, number, number] | null {
   return [r, g, b];
 }
 
+function isColorContext(obj: any, parentKey: string | null, parentObj: any): boolean {
+  // Se a chave do pai for 'c', é cor
+  if (parentKey === 'c') return true;
+  // Se o objeto pai tem ty: 'st' (stroke) ou 'fl' (fill), é cor
+  if (parentObj && (parentObj.ty === 'st' || parentObj.ty === 'fl')) return true;
+  return false;
+}
+
+function logColorChange(context: string, oldVal: any, newVal: any, parentKey: string | null, parentObj: any) {
+  // eslint-disable-next-line no-console
+  console.log(`[LottieColorEdit] ${context} | parentKey: ${parentKey} | parentObj.ty: ${parentObj?.ty} | from:`, oldVal, '| to:', newVal);
+}
+
 export function replaceColorInLottie(lottieData: any, oldColor: string, newColor: string): any {
   const oldRgb = hexToRgb(oldColor);
   const newRgb = hexToRgb(newColor);
-  
   if (!oldRgb || !newRgb) return lottieData;
-  
-  // Create a deep copy to avoid mutating the original
   const updatedData = JSON.parse(JSON.stringify(lottieData));
-  
-  function traverseAndReplace(obj: any) {
+  function traverseAndReplace(obj: any, parentKey: string | null = null, parentObj: any = null) {
     if (!obj || typeof obj !== 'object') return;
-    
-    // Check if this is a color field (expecting array of RGB values)
-    if (obj.k && Array.isArray(obj.k) && obj.k.length === 3 && 
+    // [r, g, b] 0-1
+    if (isColorContext(obj, parentKey, parentObj) && obj.k && Array.isArray(obj.k) && obj.k.length === 3 &&
         obj.k.every((val: any) => typeof val === 'number' && val >= 0 && val <= 1)) {
-      // Compare with allowed tolerance
       const tolerance = 0.01;
       if (
+        oldRgb && newRgb &&
         Math.abs(obj.k[0] - oldRgb[0]) < tolerance &&
         Math.abs(obj.k[1] - oldRgb[1]) < tolerance &&
         Math.abs(obj.k[2] - oldRgb[2]) < tolerance
       ) {
-        // Replace with new color
+        logColorChange('replaceColorInLottie [0-1]', obj.k, newRgb, parentKey, parentObj);
         obj.k = [...newRgb];
       }
     }
-    
-    // Recursively check all properties
+    // [r, g, b, a] 0-1
+    else if (isColorContext(obj, parentKey, parentObj) && obj.k && Array.isArray(obj.k) && obj.k.length === 4 &&
+        obj.k.slice(0, 3).every((val: any) => typeof val === 'number' && val >= 0 && val <= 1)) {
+      const tolerance = 0.01;
+      if (
+        oldRgb && newRgb &&
+        Math.abs(obj.k[0] - oldRgb[0]) < tolerance &&
+        Math.abs(obj.k[1] - oldRgb[1]) < tolerance &&
+        Math.abs(obj.k[2] - oldRgb[2]) < tolerance
+      ) {
+        logColorChange('replaceColorInLottie [0-1, alpha]', obj.k, [...newRgb, obj.k[3]], parentKey, parentObj);
+        obj.k = [...newRgb, obj.k[3]];
+      }
+    }
+    // [r, g, b] 0-255
+    else if (isColorContext(obj, parentKey, parentObj) && obj.k && Array.isArray(obj.k) && obj.k.length === 3 &&
+        obj.k.every((val: any) => typeof val === 'number' && val >= 0 && val <= 255)) {
+      const tolerance = 2; // 0-255 scale
+      if (
+        oldRgb && newRgb &&
+        Math.abs(obj.k[0] - oldRgb[0] * 255) < tolerance &&
+        Math.abs(obj.k[1] - oldRgb[1] * 255) < tolerance &&
+        Math.abs(obj.k[2] - oldRgb[2] * 255) < tolerance
+      ) {
+        logColorChange('replaceColorInLottie [0-255]', obj.k, [newRgb[0] * 255, newRgb[1] * 255, newRgb[2] * 255], parentKey, parentObj);
+        obj.k = [newRgb[0] * 255, newRgb[1] * 255, newRgb[2] * 255];
+      }
+    }
+    // [r, g, b, a] 0-255
+    else if (isColorContext(obj, parentKey, parentObj) && obj.k && Array.isArray(obj.k) && obj.k.length === 4 &&
+        obj.k.slice(0, 3).every((val: any) => typeof val === 'number' && val >= 0 && val <= 255)) {
+      const tolerance = 2;
+      if (
+        oldRgb && newRgb &&
+        Math.abs(obj.k[0] - oldRgb[0] * 255) < tolerance &&
+        Math.abs(obj.k[1] - oldRgb[1] * 255) < tolerance &&
+        Math.abs(obj.k[2] - oldRgb[2] * 255) < tolerance
+      ) {
+        logColorChange('replaceColorInLottie [0-255, alpha]', obj.k, [newRgb[0] * 255, newRgb[1] * 255, newRgb[2] * 255, obj.k[3]], parentKey, parentObj);
+        obj.k = [newRgb[0] * 255, newRgb[1] * 255, newRgb[2] * 255, obj.k[3]];
+      }
+    }
+    // hex string
+    else if (isColorContext(obj, parentKey, parentObj) && typeof obj.k === 'string' && /^#([A-Fa-f0-9]{6})$/.test(obj.k)) {
+      if (obj.k.toUpperCase() === oldColor.toUpperCase()) {
+        logColorChange('replaceColorInLottie [hex]', obj.k, newColor.toUpperCase(), parentKey, parentObj);
+        obj.k = newColor.toUpperCase();
+      }
+    }
     for (const key in obj) {
       if (Object.prototype.hasOwnProperty.call(obj, key)) {
-        traverseAndReplace(obj[key]);
+        traverseAndReplace(obj[key], key, obj);
       }
     }
   }
-  
   traverseAndReplace(updatedData);
   return updatedData;
 }
 
 export function replaceAllColorsInLottie(lottieData: any, newColor: string): any {
   const newRgb = hexToRgb(newColor);
-  
   if (!newRgb) return lottieData;
-  
-  // Create a deep copy to avoid mutating the original
   const updatedData = JSON.parse(JSON.stringify(lottieData));
-  
-  function traverseAndReplaceAll(obj: any) {
+  function traverseAndReplaceAll(obj: any, parentKey: string | null = null, parentObj: any = null) {
     if (!obj || typeof obj !== 'object') return;
-    
-    // Check if this is a color field (expecting array of RGB values)
-    if (obj.k && Array.isArray(obj.k) && obj.k.length === 3 && 
+    // [r, g, b] 0-1
+    if (isColorContext(obj, parentKey, parentObj) && obj.k && Array.isArray(obj.k) && obj.k.length === 3 &&
         obj.k.every((val: any) => typeof val === 'number' && val >= 0 && val <= 1)) {
-      // Replace with new color, regardless of original color
-      obj.k = [...newRgb];
+      if (newRgb) {
+        logColorChange('replaceAllColorsInLottie [0-1]', obj.k, [newRgb[0], newRgb[1], newRgb[2]], parentKey, parentObj);
+        obj.k = [newRgb[0], newRgb[1], newRgb[2]];
+      }
     }
-    
-    // Recursively check all properties
+    // [r, g, b, a] 0-1
+    else if (isColorContext(obj, parentKey, parentObj) && obj.k && Array.isArray(obj.k) && obj.k.length === 4 &&
+        obj.k.slice(0, 3).every((val: any) => typeof val === 'number' && val >= 0 && val <= 1)) {
+      if (newRgb) {
+        logColorChange('replaceAllColorsInLottie [0-1, alpha]', obj.k, [newRgb[0], newRgb[1], newRgb[2], obj.k[3]], parentKey, parentObj);
+        obj.k = [newRgb[0], newRgb[1], newRgb[2], obj.k[3]];
+      }
+    }
+    // [r, g, b] 0-255
+    else if (isColorContext(obj, parentKey, parentObj) && obj.k && Array.isArray(obj.k) && obj.k.length === 3 &&
+        obj.k.every((val: any) => typeof val === 'number' && val >= 0 && val <= 255)) {
+      if (newRgb) {
+        logColorChange('replaceAllColorsInLottie [0-255]', obj.k, [newRgb[0] * 255, newRgb[1] * 255, newRgb[2] * 255], parentKey, parentObj);
+        obj.k = [newRgb[0] * 255, newRgb[1] * 255, newRgb[2] * 255];
+      }
+    }
+    // [r, g, b, a] 0-255
+    else if (isColorContext(obj, parentKey, parentObj) && obj.k && Array.isArray(obj.k) && obj.k.length === 4 &&
+        obj.k.slice(0, 3).every((val: any) => typeof val === 'number' && val >= 0 && val <= 255)) {
+      if (newRgb) {
+        logColorChange('replaceAllColorsInLottie [0-255, alpha]', obj.k, [newRgb[0] * 255, newRgb[1] * 255, newRgb[2] * 255, obj.k[3]], parentKey, parentObj);
+        obj.k = [newRgb[0] * 255, newRgb[1] * 255, newRgb[2] * 255, obj.k[3]];
+      }
+    }
+    // hex string
+    else if (isColorContext(obj, parentKey, parentObj) && typeof obj.k === 'string' && /^#([A-Fa-f0-9]{6})$/.test(obj.k)) {
+      logColorChange('replaceAllColorsInLottie [hex]', obj.k, newColor.toUpperCase(), parentKey, parentObj);
+      obj.k = newColor.toUpperCase();
+    }
     for (const key in obj) {
       if (Object.prototype.hasOwnProperty.call(obj, key)) {
-        traverseAndReplaceAll(obj[key]);
+        traverseAndReplaceAll(obj[key], key, obj);
       }
     }
   }
-  
   traverseAndReplaceAll(updatedData);
   return updatedData;
 }
