@@ -3,7 +3,8 @@ import { apiRequest } from "./queryClient";
 interface LottieMetadata {
   id: string;
   name: string;
-  jsonUrl: string;
+  jsonUrl?: string;
+  jsonData?: any;
 }
 
 export async function extractLottieFromUrl(url: string): Promise<LottieMetadata> {
