@@ -111,7 +111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Helper function to process a .lottie file (which is a ZIP)
-  async function processLottieFile(lottieUrl, name, res) {
+  async function processLottieFile(lottieUrl: string, name: string, res: any) {
     try {
       console.log("Downloading .lottie file from:", lottieUrl);
       const response = await fetch(lottieUrl);

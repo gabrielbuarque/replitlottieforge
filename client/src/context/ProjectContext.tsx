@@ -104,11 +104,21 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       // 1. Extract metadata from URL
       const metadata = await extractLottieFromUrl(url);
       
+      let jsonData: any;
+      
       // 2. Get the actual JSON data
-      const jsonData = await getLottieJsonData(metadata.jsonUrl);
+      if (metadata.jsonData) {
+        // If the server already sent us the JSON data (e.g., from a .lottie file)
+        jsonData = metadata.jsonData;
+      } else if (metadata.jsonUrl) {
+        // If we got a URL, fetch the JSON
+        jsonData = await getLottieJsonData(metadata.jsonUrl);
+      } else {
+        throw new Error("No animation data found");
+      }
       
       // 3. Create a new project with the data
-      return createProject(metadata.name, jsonData, metadata.jsonUrl);
+      return createProject(metadata.name, jsonData, metadata.jsonUrl || "local://import");
     } catch (error) {
       console.error("Failed to import project", error);
       throw new Error("Failed to import animation from URL");
