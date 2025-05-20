@@ -15,6 +15,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "URL is required" });
       }
       
+      console.log("Attempting to extract Lottie from URL:", url);
+      
+      // Check if the URL is directly to a JSON file
+      if (url.endsWith('.json')) {
+        const urlParts = url.split('/');
+        const fileName = urlParts[urlParts.length - 1];
+        const name = fileName.replace('.json', '').replace(/-|_/g, ' ');
+        
+        console.log("Direct JSON URL detected:", url);
+        return res.json({
+          id: Date.now().toString(),
+          name,
+          jsonUrl: url
+        });
+      }
+      
+      // Extract animation ID from the URL for the modern LottieFiles format
+      let animationId = '';
+      // Format: https://lottiefiles.com/free-animation/name-XXXXXX
+      const idMatch = url.match(/\/free-animation\/.*?-([A-Za-z0-9]+)/);
+      if (idMatch && idMatch[1]) {
+        animationId = idMatch[1];
+        console.log("Extracted animation ID:", animationId);
+      } else {
+        // Try other patterns if needed
+        const legacyMatch = url.match(/\/(\d+)-/);
+        if (legacyMatch && legacyMatch[1]) {
+          animationId = legacyMatch[1];
+          console.log("Extracted legacy ID:", animationId);
+        }
+      }
+      
+      if (!animationId) {
+        console.log("No animation ID found in URL");
+      }
+      
       // Fetch the webpage content
       const response = await fetch(url);
       const html = await response.text();
@@ -22,17 +58,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Parse with cheerio
       const $ = cheerio.load(html);
       
-      // Try to find lottie player and get its source
-      const lottiePlayer = $("dotlottie-player, lottie-player");
+      // Try multiple methods to find the JSON URL
       
-      if (lottiePlayer.length === 0) {
-        return res.status(404).json({ message: "No Lottie animation found on this page" });
+      // Method 1: Check for dotlottie-player or lottie-player (original method)
+      let src = null;
+      const lottiePlayer = $("dotlottie-player, lottie-player");
+      if (lottiePlayer.length > 0) {
+        src = lottiePlayer.attr("src");
+        console.log("Found player element with src:", src);
       }
       
-      const src = lottiePlayer.attr("src");
+      // Method 2: Look for JSON data in scripts
+      if (!src) {
+        const scripts = $("script").toArray();
+        for (const script of scripts) {
+          const content = $(script).html() || '';
+          
+          // Look for animation data in script content
+          if (content.includes('animationData') || content.includes('lottie')) {
+            const jsonMatch = content.match(/https:\/\/[^"']+\.json/);
+            if (jsonMatch) {
+              src = jsonMatch[0];
+              console.log("Found JSON URL in script:", src);
+              break;
+            }
+          }
+        }
+      }
+      
+      // Method 3: Use the animation ID to construct a likely URL
+      if (!src && animationId) {
+        src = `https://assets1.lottiefiles.com/animations/${animationId}.json`;
+        console.log("Constructed JSON URL from ID:", src);
+      }
       
       if (!src) {
-        return res.status(404).json({ message: "Lottie animation source not found" });
+        return res.status(404).json({ message: "Lottie animation source not found. Try using a direct JSON URL." });
       }
       
       // Extract name from URL or page title
@@ -40,9 +101,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // If title is too long or has special chars, extract from URL
       if (name.length > 50 || /[^\w\s-]/.test(name)) {
-        const urlParts = url.split("/");
-        const lastPart = urlParts[urlParts.length - 1];
-        name = lastPart.split("-").join(" ").trim() || "lottie-animation";
+        // Try to get the name from the URL path
+        let nameFromUrl = '';
+        if (url.includes('/free-animation/')) {
+          const pathParts = url.split('/free-animation/')[1].split('-');
+          // Remove the last part (which is likely the ID)
+          pathParts.pop();
+          nameFromUrl = pathParts.join(' ');
+        } else {
+          const urlParts = url.split('/');
+          const lastPart = urlParts[urlParts.length - 1].split('?')[0];
+          nameFromUrl = lastPart.split('-').join(' ').trim();
+        }
+        
+        name = nameFromUrl || "lottie-animation";
       }
       
       // Clean name further
@@ -50,6 +122,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .replace(/lottie(files)?|animation/gi, "")
         .replace(/\s+/g, " ")
         .trim() || "animation";
+      
+      console.log("Extracted name:", name);
+      console.log("JSON URL:", src);
       
       // Return the animation metadata
       res.json({
