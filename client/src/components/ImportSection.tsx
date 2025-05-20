@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import ProjectsModal from "./modals/ProjectsModal";
+import { sampleLottieJSON } from "@/lib/sampleLottie";
 
 export default function ImportSection() {
   const [importUrl, setImportUrl] = useState<string>("");
@@ -57,11 +58,12 @@ export default function ImportSection() {
   const handleJsonImport = async (e: FormEvent) => {
     e.preventDefault();
     
+    // Use sample JSON data if the textarea is empty
     if (!jsonContent.trim()) {
+      setJsonContent(JSON.stringify(sampleLottieJSON, null, 2));
       toast({
-        title: "Empty JSON",
-        description: "Please paste valid JSON content.",
-        variant: "destructive"
+        title: "Sample JSON Loaded",
+        description: "We've loaded a sample Lottie animation for you to try."
       });
       return;
     }
@@ -175,7 +177,7 @@ export default function ImportSection() {
                   disabled={isLoading}
                 />
                 <Textarea
-                  placeholder="{...paste your Lottie JSON here...}"
+                  placeholder="{...paste your Lottie JSON here or click Import JSON to load a sample...}"
                   className="min-h-[200px] px-4 py-3 rounded-lg border border-gray-300 focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none font-mono text-sm"
                   value={jsonContent}
                   onChange={(e) => setJsonContent(e.target.value)}
@@ -184,7 +186,7 @@ export default function ImportSection() {
                 <Button 
                   type="submit" 
                   className="px-6 py-3 bg-accent text-white rounded-lg hover:bg-accent/90 transition-colors focus:ring-2 focus:ring-accent/50 outline-none font-medium"
-                  disabled={isLoading || !jsonContent.trim()}
+                  disabled={isLoading}
                 >
                   {isLoading ? (
                     <><i className="fas fa-spinner fa-spin mr-2"></i>Processing...</>
