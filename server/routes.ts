@@ -1,11 +1,158 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import * as cheerio from "cheerio";
 import fetch from "node-fetch";
 import AdmZip from "adm-zip";
+import { insertProjectSchema } from "@shared/schema";
+import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // API endpoint to get all projects
+  app.get("/api/projects", async (req, res) => {
+    try {
+      const projects = await storage.getProjects();
+      res.json(projects);
+    } catch (error) {
+      console.error("Error getting projects:", error);
+      res.status(500).json({ message: "Failed to get projects" });
+    }
+  });
+
+  // API endpoint to get a specific project
+  app.get("/api/projects/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid project ID" });
+      }
+      
+      const project = await storage.getProject(id);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      res.json(project);
+    } catch (error) {
+      console.error("Error getting project:", error);
+      res.status(500).json({ message: "Failed to get project" });
+    }
+  });
+
+  // API endpoint to create a new project
+  app.post("/api/projects", async (req, res) => {
+    try {
+      const result = insertProjectSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: "Invalid project data",
+          errors: result.error.format() 
+        });
+      }
+      
+      const newProject = await storage.createProject(result.data);
+      res.status(201).json(newProject);
+    } catch (error) {
+      console.error("Error creating project:", error);
+      res.status(500).json({ message: "Failed to create project" });
+    }
+  });
+
+  // API endpoint to update a project
+  app.patch("/api/projects/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid project ID" });
+      }
+      
+      const project = await storage.getProject(id);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      // Only allow updating certain fields
+      const allowedFields = ['name', 'jsonUrl', 'jsonData'];
+      const updateData: Record<string, any> = {};
+      
+      for (const field of allowedFields) {
+        if (field in req.body) {
+          updateData[field] = req.body[field];
+        }
+      }
+      
+      const updatedProject = await storage.updateProject(id, updateData);
+      res.json(updatedProject);
+    } catch (error) {
+      console.error("Error updating project:", error);
+      res.status(500).json({ message: "Failed to update project" });
+    }
+  });
+
+  // API endpoint to delete a project
+  app.delete("/api/projects/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid project ID" });
+      }
+      
+      const result = await storage.deleteProject(id);
+      if (!result) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting project:", error);
+      res.status(500).json({ message: "Failed to delete project" });
+    }
+  });
+
+  // API endpoint to get color history for a project
+  app.get("/api/projects/:id/colors", async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      if (isNaN(projectId)) {
+        return res.status(400).json({ message: "Invalid project ID" });
+      }
+      
+      // Get limit from query parameter, default to 20
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+      
+      const colorHistory = await storage.getColorHistory(projectId, limit);
+      res.json(colorHistory);
+    } catch (error) {
+      console.error("Error getting color history:", error);
+      res.status(500).json({ message: "Failed to get color history" });
+    }
+  });
+
+  // API endpoint to save a color change to history
+  app.post("/api/projects/:id/colors", async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      if (isNaN(projectId)) {
+        return res.status(400).json({ message: "Invalid project ID" });
+      }
+      
+      const { oldColor, newColor } = req.body;
+      if (!oldColor || !newColor) {
+        return res.status(400).json({ message: "Old color and new color are required" });
+      }
+      
+      const colorHistoryEntry = await storage.createColorHistory({
+        projectId,
+        oldColor,
+        newColor
+      });
+      
+      res.status(201).json(colorHistoryEntry);
+    } catch (error) {
+      console.error("Error saving color history:", error);
+      res.status(500).json({ message: "Failed to save color history" });
+    }
+  });
   // API endpoint to extract Lottie animation from a URL
   app.post("/api/extract-lottie", async (req, res) => {
     try {
