@@ -228,19 +228,23 @@ export default function ColorEditor() {
                     </span>
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-md" style={{ backgroundColor: group.color }} />
-                      <input
-                        type="color"
-                        value={hexInput[group.paths[0]]}
-                        onChange={e => group.paths.forEach(path => handleColorInputChange(path, e.target.value))}
-                        className="w-8 h-8 cursor-pointer"
-                      />
-                      <Input
-                        type="text"
-                        value={hexInput[group.paths[0]]}
-                        onChange={e => group.paths.forEach(path => handleHexInputChange(path, e.target.value))}
-                        className="w-24 font-mono"
-                        maxLength={7}
-                      />
+                      {group.paths.length > 0 && (
+                        <>
+                          <input
+                            type="color"
+                            value={hexInput[group.paths[0]]}
+                            onChange={e => group.paths.forEach(path => handleColorInputChange(path, e.target.value))}
+                            className="w-8 h-8 cursor-pointer"
+                          />
+                          <Input
+                            type="text"
+                            value={hexInput[group.paths[0]]}
+                            onChange={e => group.paths.forEach(path => handleHexInputChange(path, e.target.value))}
+                            className="w-24 font-mono"
+                            maxLength={7}
+                          />
+                        </>
+                      )}
                       <span className="text-xs text-gray-400 ml-2">{group.count}x</span>
                     </div>
                   </div>
