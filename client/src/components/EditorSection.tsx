@@ -5,6 +5,7 @@ import { formatTimestamp } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useVersionHistory } from "@/hooks/useVersionHistory";
 import Editor, { OnMount } from "@monaco-editor/react";
+import ColorEditor from "@/components/ColorEditor";
 
 export default function EditorSection() {
   const { currentProject, updateLottieJson } = useProjectContext();
@@ -148,27 +149,13 @@ export default function EditorSection() {
         </div>
       </div>
 
-      <div className="flex responsive-container gap-6 mb-6 flex-col md:flex-row">
-        {/* Editor Panel */}
-        <div className="w-full md:w-1/2 h-[500px] border border-gray-200 rounded-md overflow-hidden">
-          <Editor
-            height="100%"
-            defaultLanguage="json"
-            defaultValue={JSON.stringify(currentProject.jsonData, null, 2)}
-            theme="vs-dark"
-            options={{
-              minimap: { enabled: false },
-              scrollBeyondLastLine: false,
-              automaticLayout: true,
-              wordWrap: "on",
-              tabSize: 2,
-            }}
-            onMount={handleEditorMount}
-          />
+      <div className="flex flex-col md:flex-row gap-6 mb-6">
+        {/* Color Editor */}
+        <div className="w-full md:w-1/2">
+          <ColorEditor />
         </div>
-        
         {/* Preview Panel */}
-        <div className="w-full md:w-1/2 preview-container bg-white rounded-md border border-gray-200 shadow-sm flex flex-col">
+        <div className="w-full md:w-1/2 preview-container bg-white rounded-md border border-gray-200 shadow-sm flex flex-col md:sticky md:top-0 md:h-screen" style={{ maxHeight: '100vh' }}>
           <div className="p-4 border-b border-gray-200 flex justify-between items-center">
             <h3 className="font-semibold">Preview</h3>
             <div className="flex space-x-2">
@@ -195,19 +182,33 @@ export default function EditorSection() {
               </button>
             </div>
           </div>
-          <div className="flex-grow p-6 flex items-center justify-center bg-[#fafafa]">
+          <div className="flex-grow p-6 flex items-center justify-center bg-[#fafafa]" style={{ minHeight: 0 }}>
             <lottie-player
               ref={lottieRef}
-              mode="normal"
-              src={JSON.stringify(currentProject.jsonData)}
-              style={{ width: "250px", height: "250px" }}
-              background="transparent"
-              speed="1"
+              autoplay
               loop={isLooping}
-              autoplay={isPlaying}
-            ></lottie-player>
+              style={{ width: "100%", height: 'calc(100vh - 80px)' }}
+            />
           </div>
         </div>
+      </div>
+
+      {/* Editor Panel pode ficar abaixo ou em aba separada se desejar */}
+      <div className="w-full h-[500px] border border-gray-200 rounded-md overflow-hidden mt-6">
+        <Editor
+          height="100%"
+          defaultLanguage="json"
+          defaultValue={JSON.stringify(currentProject.jsonData, null, 2)}
+          theme="vs-dark"
+          options={{
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+            automaticLayout: true,
+            wordWrap: "on",
+            tabSize: 2,
+          }}
+          onMount={handleEditorMount}
+        />
       </div>
     </section>
   );

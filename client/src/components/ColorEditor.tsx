@@ -1,53 +1,87 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { hexToRgb, replaceColorInLottie, replaceAllColorsInLottie } from "@/lib/utils";
+import { hexToRgb, replaceColorInLottie, replaceAllColorsInLottie, extractAllColorsFromLottie } from "@/lib/utils";
 import { useProjectContext } from "@/context/ProjectContext";
-import { useColorDetection } from "@/hooks/useColorDetection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-interface ColorItem {
-  color: string;
-  count: number;
-  id: string;
+type DetectedColor = { color: string; type: string; path: string };
+
+// Função utilitária para comparar cores (hex) com tolerância
+function hexColorDistance(hex1: string, hex2: string) {
+  const rgb1 = hexToRgb(hex1);
+  const rgb2 = hexToRgb(hex2);
+  if (!rgb1 || !rgb2) return 999;
+  // Distância euclidiana
+  return Math.sqrt(
+    Math.pow(rgb1[0] - rgb2[0], 2) +
+    Math.pow(rgb1[1] - rgb2[1], 2) +
+    Math.pow(rgb1[2] - rgb2[2], 2)
+  );
+}
+
+// Agrupa cores próximas e conta ocorrências
+function groupColors(colors: DetectedColor[], tolerance = 0.04) {
+  const groups: { color: string, paths: string[], type: string[], count: number }[] = [];
+  colors.forEach((item) => {
+    let found = false;
+    for (const group of groups) {
+      if (hexColorDistance(group.color, item.color) < tolerance) {
+        group.paths.push(item.path);
+        group.type.push(item.type);
+        group.count++;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      groups.push({ color: item.color, paths: [item.path], type: [item.type], count: 1 });
+    }
+  });
+  // Ordena: menos frequentes primeiro
+  groups.sort((a, b) => a.count - b.count);
+  return groups;
 }
 
 export default function ColorEditor() {
   const { currentProject, updateLottieJson } = useProjectContext();
   const { toast } = useToast();
-  const { detectedColors, detectColors } = useColorDetection();
+  const [detectedColors, setDetectedColors] = useState<DetectedColor[]>([]);
   const [colorHistory, setColorHistory] = useState<string[]>([]);
   const [globalColor, setGlobalColor] = useState<string>("#0066CC");
   const [hexInput, setHexInput] = useState<Record<string, string>>({});
+  const groupedColors = useMemo(() => groupColors(detectedColors), [detectedColors]);
 
   useEffect(() => {
     if (currentProject?.jsonData) {
-      detectColors(currentProject.jsonData);
+      // Nova extração completa
+      const allColors = extractAllColorsFromLottie(currentProject.jsonData);
+      setDetectedColors(allColors);
     }
-  }, [currentProject?.jsonData, detectColors]);
+  }, [currentProject?.jsonData]);
 
   useEffect(() => {
     // Initialize hex input values for all detected colors
     const initialHexValues: Record<string, string> = {};
-    detectedColors.forEach(item => {
-      initialHexValues[item.id] = item.color.toUpperCase();
+    detectedColors.forEach((item, idx) => {
+      initialHexValues[item.path] = item.color.toUpperCase();
     });
     setHexInput(initialHexValues);
   }, [detectedColors]);
 
-  const updateColor = (oldColor: string, newColor: string) => {
+  const updateColorAtPath = (path: string, newColor: string) => {
     if (!currentProject || !currentProject.jsonData) return;
     
     // Add old color to history if it's not already the last item
-    if (colorHistory.length === 0 || colorHistory[0] !== oldColor) {
-      setColorHistory(prev => [oldColor, ...prev.slice(0, 19)]);
+    if (colorHistory.length === 0 || colorHistory[0] !== newColor) {
+      setColorHistory(prev => [newColor, ...prev.slice(0, 19)]);
     }
     
     try {
       const updatedData = replaceColorInLottie(
         currentProject.jsonData,
-        oldColor,
+        detectedColors.find(c => c.path === path)?.color || '',
         newColor
       );
       
@@ -55,7 +89,7 @@ export default function ColorEditor() {
       
       toast({
         title: "Color updated",
-        description: `Changed color from ${oldColor} to ${newColor}`
+        description: `Changed color from ${detectedColors.find(c => c.path === path)?.color} to ${newColor}`
       });
     } catch (error) {
       toast({
@@ -67,24 +101,15 @@ export default function ColorEditor() {
     }
   };
 
-  const handleColorInputChange = (id: string, newColor: string) => {
-    const item = detectedColors.find(c => c.id === id);
-    if (item) {
-      setHexInput(prev => ({ ...prev, [id]: newColor.toUpperCase() }));
-      updateColor(item.color, newColor);
-    }
+  const handleColorInputChange = (path: string, newColor: string) => {
+    setHexInput(prev => ({ ...prev, [path]: newColor.toUpperCase() }));
+    updateColorAtPath(path, newColor);
   };
 
-  const handleHexInputChange = (id: string, value: string) => {
-    // Update the input value
-    setHexInput(prev => ({ ...prev, [id]: value.toUpperCase() }));
-    
-    // Only update the color if it's a valid hex value
+  const handleHexInputChange = (path: string, value: string) => {
+    setHexInput(prev => ({ ...prev, [path]: value.toUpperCase() }));
     if (/^#[0-9A-F]{6}$/i.test(value)) {
-      const item = detectedColors.find(c => c.id === id);
-      if (item) {
-        updateColor(item.color, value);
-      }
+      updateColorAtPath(path, value);
     }
   };
 
@@ -125,10 +150,10 @@ export default function ColorEditor() {
     const colorIndex = colorHistory.indexOf(historyColor);
     
     if (colorIndex >= 0 && colorIndex < currentColors.length) {
-      updateColor(currentColors[colorIndex], historyColor);
+      updateColorAtPath(detectedColors[colorIndex].path, historyColor);
     } else if (currentColors.length > 0) {
       // Just update the first color if we can't find a match
-      updateColor(currentColors[0], historyColor);
+      updateColorAtPath(detectedColors[0].path, historyColor);
     }
   };
 
@@ -192,35 +217,31 @@ export default function ColorEditor() {
           <div>
             <h4 className="text-sm uppercase text-gray-500 font-medium mb-3">Detected Colors</h4>
             
-            {detectedColors.length === 0 ? (
+            {groupedColors.length === 0 ? (
               <div className="text-gray-500 italic">No colors detected in this animation</div>
             ) : (
-              detectedColors.map((item) => (
-                <div key={item.id} className="mb-4 p-4 border border-gray-200 rounded-md hover:border-accent/30 transition-all">
+              groupedColors.map((group, idx) => (
+                <div key={group.color + idx} className="mb-4 p-4 border border-gray-200 rounded-md hover:border-accent/30 transition-all">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div 
-                        className="w-10 h-10 rounded-md" 
-                        style={{ backgroundColor: item.color }} 
+                    <span className="text-xs text-gray-500 mr-2">
+                      {group.type.includes('static') ? 'Static' : group.type.includes('keyframe-s') && group.type.includes('keyframe-e') ? 'Keyframe Start/End' : group.type[0]}
+                    </span>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-md" style={{ backgroundColor: group.color }} />
+                      <input
+                        type="color"
+                        value={hexInput[group.paths[0]]}
+                        onChange={e => group.paths.forEach(path => handleColorInputChange(path, e.target.value))}
+                        className="w-8 h-8 cursor-pointer"
                       />
-                      <div>
-                        <span className="font-mono text-sm">{item.color}</span>
-                        <p className="text-xs text-gray-500">Used in {item.count} element{item.count !== 1 ? 's' : ''}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <input 
-                        type="color" 
-                        value={item.color}
-                        className="w-8 h-8 rounded cursor-pointer appearance-none bg-transparent border-0" 
-                        onChange={(e) => handleColorInputChange(item.id, e.target.value)}
+                      <Input
+                        type="text"
+                        value={hexInput[group.paths[0]]}
+                        onChange={e => group.paths.forEach(path => handleHexInputChange(path, e.target.value))}
+                        className="w-24 font-mono"
+                        maxLength={7}
                       />
-                      <button 
-                        className="p-2 text-gray-500 hover:text-accent"
-                        onClick={() => findElements(item.color)}
-                      >
-                        <i className="fas fa-search"></i>
-                      </button>
+                      <span className="text-xs text-gray-400 ml-2">{group.count}x</span>
                     </div>
                   </div>
                 </div>
@@ -238,15 +259,15 @@ export default function ColorEditor() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {detectedColors.map((item) => (
-                  <div key={item.id} className="p-3 border border-gray-200 rounded-md flex items-center gap-3">
+                  <div key={item.path} className="p-3 border border-gray-200 rounded-md flex items-center gap-3">
                     <div 
                       className="w-8 h-8 rounded-md flex-shrink-0" 
                       style={{ backgroundColor: item.color }} 
                     />
                     <Input
                       type="text"
-                      value={hexInput[item.id] || item.color}
-                      onChange={(e) => handleHexInputChange(item.id, e.target.value)}
+                      value={hexInput[item.path] || item.color}
+                      onChange={(e) => handleHexInputChange(item.path, e.target.value)}
                       className="font-mono text-sm"
                       placeholder="#RRGGBB"
                       maxLength={7}
