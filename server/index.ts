@@ -57,7 +57,7 @@ app.use((req, res, next) => {
   }
 
   // Permite definir a porta via variável de ambiente PORT, padrão 5000
-  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3127;
+  const port = process.env.PORT ? parseInt(process.env.PORT, 10) :5000;
   server.listen(port, "127.0.0.1", () => {
     log(`serving on port ${port}`);
   });
