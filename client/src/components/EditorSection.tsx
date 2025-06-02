@@ -7,6 +7,15 @@ import { useVersionHistory } from "@/hooks/useVersionHistory";
 import Editor, { OnMount } from "@monaco-editor/react";
 import ColorEditor from "@/components/ColorEditor";
 
+// Importa o tipo global do lottie-player
+type LottiePlayerElement = HTMLElement & {
+  load: (data: string) => void;
+  play: () => void;
+  pause: () => void;
+  stop: () => void;
+  setLooping: (loop: boolean) => void;
+};
+
 export default function EditorSection() {
   const { currentProject, updateLottieJson } = useProjectContext();
   const { toast } = useToast();
@@ -21,7 +30,7 @@ export default function EditorSection() {
   
   const [isPlaying, setIsPlaying] = useState(true);
   const [isLooping, setIsLooping] = useState(true);
-  const lottieRef = useRef<HTMLElement | null>(null);
+  const lottieRef = useRef<LottiePlayerElement | null>(null);
   const editorRef = useRef<any>(null);
   
   useEffect(() => {
