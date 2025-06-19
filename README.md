@@ -91,3 +91,16 @@ Crie um arquivo `.env` (git-ignored) se desejar ajustar variáveis.
 ## 📜  Licença
 
 MIT © 2025 LottieForge 
+
+## 🧹  Resetando dependências / limpando cache
+
+Caso encontre problemas de build em outra máquina ou queira garantir instalação limpa:
+
+```bash
+npm run clean   # remove node_modules, package-lock.json, cache do npm e pré-bundles do Vite
+npm install     # reinstala tudo do zero
+```
+
+O script utiliza `rimraf` (já incluso em *devDependencies*) para funcionar em todos os sistemas operacionais.
+
+--- 
