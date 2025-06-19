@@ -86,6 +86,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           }
         }
+        // New fallback: derive direct JSON URL using the slug ID
+        const slugPart = url.split('/').pop();
+        if (slugPart && slugPart.includes('-')) {
+          const potentialId = slugPart.split('-').pop(); // after last '-'
+          const jsonUrlCandidate = `https://assets9.lottiefiles.com/packages/lf20_${potentialId}.json`;
+          console.log("Trying derived JSON URL:", jsonUrlCandidate);
+          try {
+            const headRes = await fetch(jsonUrlCandidate, { method: 'HEAD' });
+            if (headRes.ok) {
+              console.log("Derived JSON URL exists, returning it");
+              return res.json({
+                id: Date.now().toString(),
+                name: animationName,
+                jsonUrl: jsonUrlCandidate
+              });
+            } else {
+              console.log("Derived JSON URL not valid (", headRes.status, ")");
+            }
+          } catch (err) {
+            console.error("Error checking derived JSON URL", err);
+          }
+        }
       }
       
       // If nothing worked, provide a sample animation
